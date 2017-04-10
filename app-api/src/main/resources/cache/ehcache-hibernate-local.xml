@@ -1,0 +1,14 @@
+<?xml version="1.1" encoding="UTF-8"?>
+<ehcache updateCheck="false" name="hibernateCache">
+
+	<!-- DefaultCache setting. -->
+	<defaultCache 
+	maxEntriesLocalHeap="10000" 
+	eternal="false" 
+	timeToIdleSeconds="300" 
+	timeToLiveSeconds="600"
+	overflowToDisk="false" 
+	maxEntriesLocalDisk="100000" 
+	memoryStoreEvictionPolicy="LFU"/>
+
+</ehcache>

@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:mvc="http://www.springframework.org/schema/mvc"
+       xsi:schemaLocation="
+       http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+       http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd
+       http://www.springframework.org/schema/mvc http://www.springframework.org/schema/mvc/spring-mvc.xsd">
+
+    <!-- 设置扫描使用注解的类所在的包 -->
+    <context:component-scan base-package="io.zhijian.app.controller"/>
+
+    <!-- 加载配置文件数据 -->
+    <bean class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+        <property name="locations">
+            <list>
+                <value>classpath*:config/redis.properties</value>
+                <value>classpath*:config/token.properties</value>
+            </list>
+        </property>
+        <property name="ignoreUnresolvablePlaceholders" value="true"/>
+    </bean>
+
+    <!-- 自定义JSON转换器 -->
+    <mvc:annotation-driven>
+        <mvc:message-converters>
+            <bean class="io.zhijian.base.converter.ApplicationJsonHttpMessageConverter">
+                <property name="supportedMediaTypes" value="application/json;text/plain;charset=UTF-8"/>
+                <property name="features">
+                    <array>
+                        <value>WriteMapNullValue</value>
+                        <value>WriteNullStringAsEmpty</value>
+                        <value>DisableCircularReferenceDetect</value>
+                    </array>
+                </property>
+            </bean>
+        </mvc:message-converters>
+
+        <mvc:argument-resolvers>
+            <!--配置注入登录用户的解析器-->
+            <bean id="currentUserMethodArgumentResolver"
+                  class="io.zhijian.authorization.resolvers.CurrentUserMethodArgumentResolver">
+                <!--需要解析的用户类-->
+                <property name="userModelClass" value="io.zhijian.system.model.response.UserResponse"/>
+                <!--查询用户的bean-->
+                <property name="userModelRepository" ref="userRepository"/>
+            </bean>
+        </mvc:argument-resolvers>
+    </mvc:annotation-driven>
+
+    <!-- 自定义异常处理 -->
+    <bean id="handlerExceptionResolver" class="io.zhijian.base.exception.AnnotationHandlerMethodExceptionResolver">
+        <property name="defaultErrorView" value="/error/500"/>
+        <property name="messageConverters">
+            <list>
+                <bean class="org.springframework.http.converter.ByteArrayHttpMessageConverter"/>
+                <bean class="com.alibaba.fastjson.support.spring.FastJsonHttpMessageConverter">
+                    <property name="supportedMediaTypes" value="application/json;text/plain;charset=UTF-8"/>
+                    <property name="features">
+                        <array>
+                            <value>WriteMapNullValue</value>
+                            <value>WriteNullStringAsEmpty</value>
+                            <value>DisableCircularReferenceDetect</value>
+                        </array>
+                    </property>
+                </bean>
+            </list>
+        </property>
+    </bean>
+
+    <!--授权认证配置 begin-->
+
+    <!--通过Key获得对应用户的bean-->
+    <bean id="userRepository" class="io.zhijian.app.authorization.resolver.UserRepository"/>
+    <!--<mvc:annotation-driven>
+        <mvc:argument-resolvers>
+            &lt;!&ndash;配置注入登录用户的解析器&ndash;&gt;
+            <bean id="currentUserMethodArgumentResolver"
+                  class="io.zhijian.authorization.resolvers.CurrentUserMethodArgumentResolver">
+                &lt;!&ndash;需要解析的用户类&ndash;&gt;
+                <property name="userModelClass" value="io.zhijian.system.model.response.UserResponse"/>
+                &lt;!&ndash;查询用户的bean&ndash;&gt;
+                <property name="userModelRepository" ref="userRepository"/>
+            </bean>
+        </mvc:argument-resolvers>
+    </mvc:annotation-driven>-->
+
+    <mvc:interceptors>
+        <!--身份验证的拦截器-->
+        <bean id="authorizationInterceptor" class="io.zhijian.authorization.interceptor.AuthorizationInterceptor">
+            <!--验证信息存储的Http头-->
+            <property name="httpHeaderName" value="Authorization"/>
+            <!--验证信息通用前缀，例如Bearer-->
+            <property name="httpHeaderPrefix" value=""/>
+            <!--验证失败时的错误信息-->
+            <property name="unauthorizedErrorMessage" value="invalid&#x0020;token"/>
+            <!--管理验证信息的bean-->
+            <property name="manager" ref="tokenManager"/>
+            <!--token验证器-->
+            <property name="validator" ref="tokenValidator"/>
+        </bean>
+    </mvc:interceptors>
+
+    <!--管理验证信息的bean-->
+    <bean id="tokenValidator" class="io.zhijian.app.authorization.jwt.JwtTokenValidator"></bean>
+
+    <!--Redis配置-->
+    <bean id="jedisPoolConfig" class="redis.clients.jedis.JedisPoolConfig">
+        <!--最大连接数-->
+        <property name="maxTotal" value="${redis.maxTotal}" />
+        <!--最大空闲连接数-->
+        <property name="maxIdle" value="${redis.maxIdle}" />
+        <!--初始化连接数-->
+        <property name="minIdle" value="${redis.minIdle}"/>
+        <!--最大等待时间-->
+        <property name="maxWaitMillis" value="${redis.maxWaitMillis}" />
+        <!--对拿到的connection进行validateObject校验-->
+        <property name="testOnBorrow" value="${redis.testOnBorrow}" />
+        <!--在进行returnObject对返回的connection进行validateObject校验-->
+        <property name="testOnReturn" value="${redis.testOnReturn}" />
+        <!--定时对线程池中空闲的链接进行validateObject校验-->
+        <property name="testWhileIdle" value="true" />
+    </bean>
+
+    <!--Redis连接池-->
+    <bean id="jedisPool" class="redis.clients.jedis.JedisPool">
+        <constructor-arg index="0" ref="jedisPoolConfig"/>
+        <constructor-arg index="1" value="${redis.host}"/>
+        <constructor-arg index="2" value="${redis.port}" type="int"/>
+        <constructor-arg index="3" value="${redis.timeout}" type="int"/>
+        <constructor-arg index="4" value="${redis.password}"/>
+    </bean>
+
+    <!--管理验证信息的bean-->
+    <bean id="tokenManager" class="io.zhijian.authorization.manager.impl.RedisTokenManager">
+        <!--Redis客户端连接池配置-->
+        <property name="jedisPool" ref="jedisPool"/>
+        <!--Token失效时间-->
+        <property name="tokenExpireSeconds" value="${token.expire.seconds}"/>
+        <!--一个用户是否可以绑定多个Token-->
+        <property name="singleTokenWithUser" value="${single.token.with.user}"/>
+        <!--在每次有效操作后刷新过期时间-->
+        <property name="flushExpireAfterOperation" value="${flush.expire.after.operation}"/>
+    </bean>
+
+    <!--授权认证配置 end-->
+
+    <!-- 文件上传配置 -->
+    <bean id="multipartResolver" class="org.springframework.web.multipart.commons.CommonsMultipartResolver">
+        <property name="defaultEncoding">
+            <value>UTF-8</value>
+        </property>
+        <property name="maxUploadSize">
+            <value>1048576000</value><!-- 总上传文件大小限制为1000M，31*1024*1024 -->
+        </property>
+        <property name="maxInMemorySize">
+            <value>4096</value>
+        </property>
+    </bean>
+</beans>

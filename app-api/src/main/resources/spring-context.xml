@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xsi:schemaLocation="
+       http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+       http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd
+       http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop.xsd">
+
+    <!-- 设置扫描使用注解的类所在的包 -->
+    <context:component-scan base-package="io.zhijian" scoped-proxy="interfaces">
+        <context:exclude-filter type="annotation" expression="org.springframework.stereotype.Controller"/>
+    </context:component-scan>
+
+    <!-- 加载配置文件数据 -->
+    <bean class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+        <property name="locations">
+            <list>
+                <value>classpath*:config/db.properties</value>
+                <value>classpath*:config/redis.properties</value>
+            </list>
+        </property>
+        <property name="ignoreUnresolvablePlaceholders" value="true"/>
+    </bean>
+
+    <!--@Value读取配置文件-->
+    <bean id="propertiesReader"
+          class="org.springframework.beans.factory.config.PropertiesFactoryBean">
+        <property name="locations">
+            <list>
+                <value>classpath*:config/token.properties</value>
+                <value>classpath*:config/application.properties</value>
+            </list>
+        </property>
+        <!-- 设置编码格式 -->
+        <property name="fileEncoding" value="UTF-8"></property>
+    </bean>
+
+    <!-- 激活自动代理功能 -->
+    <aop:aspectj-autoproxy proxy-target-class="true" />
+
+    <!-- 扫描切面包路径 -->
+    <bean id="logAspect" class="io.zhijian.log.aop.LogAspect">
+        <property name="logPoint">
+            <bean class="io.zhijian.system.service.impl.SystemLogService" />
+        </property>
+    </bean>
+    <aop:config>
+        <aop:aspect ref="logAspect">
+            <aop:pointcut id="logPointCut" expression="@annotation(io.zhijian.log.annotation.Log)" />
+            <aop:around pointcut-ref="logPointCut" method="save" />
+        </aop:aspect>
+    </aop:config>
+
+    <import resource="/spring-hibernate.xml"/>
+</beans>

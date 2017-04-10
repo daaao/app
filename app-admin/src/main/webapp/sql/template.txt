@@ -1,0 +1,9 @@
+
+<#assign data = params?eval>
+
+select module, count(*) as count
+from sys_log
+<#if name??>
+
+</#if>
+group by module order by count
